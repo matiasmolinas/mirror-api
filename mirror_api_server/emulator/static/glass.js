@@ -49,7 +49,7 @@
       mainDiv = doc.getElementById("glass"),
       activeCard,
       timer, running = false,
-      recognition, mouseX, mouseY, glassevent, cardType, Card, ActionCard, ClockCard, ReplyCard, CameraCard, timestep,
+      recognition, mouseX, mouseY, glassevent, cardType, Card, ActionCard, ClockCard, ReplyCard, CameraCard, VideoCard, timestep,
       photoCount = 0, lastLocationUpdate = 0, Tween;
 
     /**
@@ -101,7 +101,8 @@
       REPLY_CARD: 6,
       HTML_BUNDLE_CARD: 7,
       CARD_BUNDLE_CARD: 8,
-      CAMERA_CARD: 9
+      CAMERA_CARD: 9,
+	  VIDEO_CARD: 10
     };
 
     demoCards = {
@@ -279,6 +280,10 @@
       "<video class=\"card_video\"></video>" +
       "<canvas style=\"display: none\" class=\"card_canvas\"></canvas>" +
       "<div class=\"card_text\"></div>";
+	 templates[cardType.VIDEO_CARD] =
+      "<video class=\"card_video\"></video>" +
+      "<canvas style=\"display: none\" class=\"card_canvas\"></canvas>" +
+      "<div class=\"card_text\"></div>";
     templates[cardType.HTML_BUNDLE_CARD] = templates[cardType.CONTENT_CARD];
     templates[cardType.CARD_BUNDLE_CARD] = templates[cardType.CONTENT_CARD];
 
@@ -389,6 +394,9 @@
               this.image = att.contentUrl;
             }
             break;
+          } else if (att.contentType.indexOf("video/") === 0) {
+            
+            break;
           }
         }
       }
@@ -451,39 +459,43 @@
       }
 
       function shareMedia() {
-        var data, boundary, delimiter, close_delim, imageData, multipartRequestBody, xhr;
+        var data, boundary, delimiter, close_delim, imageData, videoData, multipartRequestBody, xhr;
 
-        if (sharedCard.image.indexOf("data:image/") !== 0) {
+        if ((sharedCard.image.indexOf("data:image/") !== 0)||(sharedCard.image.indexOf("data:video/") !== 0)) {
           // can't share non data-uri's
           onError();
           return;
         }
+		
+		if (sharedCard.image.indexOf("data:image/") == 0) {
+			imageData = sharedCard.image.substring(("data:" + sharedCard.imageType + ";base64,").length);
 
-        imageData = sharedCard.image.substring(("data:" + sharedCard.imageType + ";base64,").length);
+			data = {};
+			if (sharedCard.text) {
+			  data.text = sharedCard.text;
+			}
+			if (sharedCard.data.menuItems) {
+			  data.menuItems = sharedCard.data.menuItems;
+			}
+			data.recipients = [me.data];
 
-        data = {};
-        if (sharedCard.text) {
-          data.text = sharedCard.text;
-        }
-        if (sharedCard.data.menuItems) {
-          data.menuItems = sharedCard.data.menuItems;
-        }
-        data.recipients = [me.data];
+			boundary = "-------314159265358979323846";
+			delimiter = "\r\n--" + boundary + "\r\n";
+			close_delim = "\r\n--" + boundary + "--";
 
-        boundary = "-------314159265358979323846";
-        delimiter = "\r\n--" + boundary + "\r\n";
-        close_delim = "\r\n--" + boundary + "--";
-
-        multipartRequestBody =
-          delimiter +
-          "Content-Type: application/json\r\n\r\n" +
-          JSON.stringify(data) +
-          delimiter +
-          "Content-Type: " + sharedCard.imageType + "\r\n" +
-          "Content-Transfer-Encoding: base64\r\n" +
-          "\r\n" +
-          imageData +
-          close_delim;
+			multipartRequestBody =
+			  delimiter +
+			  "Content-Type: application/json\r\n\r\n" +
+			  JSON.stringify(data) +
+			  delimiter +
+			  "Content-Type: " + sharedCard.imageType + "\r\n" +
+			  "Content-Transfer-Encoding: base64\r\n" +
+			  "\r\n" +
+			  imageData +
+			  close_delim;
+		} else if (sharedCard.image.indexOf("data:video/") == 0) {
+		
+		}
 
         xhr = new global.XMLHttpRequest();
         xhr.onreadystatechange = function () {
@@ -725,6 +737,9 @@
         break;
       case cardType.CAMERA_CARD:
         this.cardDiv.classList.add("card_type_camera");
+        break;
+	  case cardType.VIDEO_CARD:
+        this.cardDiv.classList.add("card_type_video");
         break;
       }
     };
@@ -1447,6 +1462,64 @@
       this.canvas = this.cardDiv.querySelector(".card_canvas");
       this.ctx = this.canvas.getContext("2d");
       this.video.addEventListener("play", this.takePicture.bind(this));
+    };
+	
+	/** @constructor */
+    VideoCard = function (id, parent) {
+      this.init(cardType.VIDEO_CARD, id, parent);
+    };
+
+    VideoCard.prototype = new Card();
+
+    VideoCard.prototype.show = function () {
+      Card.prototype.show.call(this);
+      this.startRecording();
+    };
+
+    VideoCard.prototype.hide = function () {
+      this.video.pause();
+      if (this.stream) {
+        this.stream.stop();
+        this.stream = undefined;
+      }
+      Card.prototype.hide.call(this);
+    };
+
+    VideoCard.prototype.recordVideo = function () {
+      var me = this;
+      me.textDiv.innerHTML = "3";
+      global.setTimeout(function () {
+        me.textDiv.innerHTML = "2";
+        global.setTimeout(function () {
+          me.textDiv.innerHTML = "1";
+          global.setTimeout(function () {
+            var card;
+            //TODO:
+          }, 1000);
+        }, 1000);
+      }, 1000);
+    };
+
+    VideoCard.prototype.startRecording = function () {
+      var me = this;
+      me.cardDiv.style.backgroundImage = "none";
+      global.navigator.getUserMedia({video: true}, function (stream) {
+        me.stream = stream;
+        me.video.style.display = "block";
+        me.video.src = global.URL.createObjectURL(stream);
+        me.video.play();
+      }, function (e) {
+        me.stream = undefined;
+        console.log(e);
+      });
+    };
+
+    VideoCard.prototype.createCardElements = function () {
+      this.createDiv();
+      this.video = this.cardDiv.querySelector(".card_video");
+      this.canvas = this.cardDiv.querySelector(".card_canvas");
+      this.ctx = this.canvas.getContext("2d");
+      this.video.addEventListener("play", this.recordVideo.bind(this));
     };
 
     /** Event Listeners */
