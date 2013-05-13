@@ -1493,8 +1493,43 @@
         global.setTimeout(function () {
           me.textDiv.innerHTML = "1";
           global.setTimeout(function () {
-            var card;
-            //TODO:
+			//capture
+			var images = [];
+			var requestAnimFrame = (function(){
+			  return  window.requestAnimationFrame       ||
+					  window.webkitRequestAnimationFrame ||
+					  window.mozRequestAnimationFrame    ||
+					  function( callback ){
+						window.setTimeout(callback, 1000 / 60);
+					  };
+			})();
+			
+			var start = Date.now();
+			var loopnum = 0;
+			var frames = 150;
+			
+			me.textDiv.innerHTML = "";
+            me.canvas.width = me.video.offsetWidth;
+            me.canvas.height = Math.floor(me.canvas.width / 16 * 9);
+			
+			function addFrame(){
+				if(loopnum == frames){
+					var timeElapsed = Date.now() - start;
+					var fps = frames / (timeElapsed / 1000);
+					var webmBlob = Whammy.fromImageArray(images, fps);
+					var url = window.URL.createObjectURL(webmBlob);
+					//TODO: send media
+				}else{
+					loopnum++;
+					requestAnimFrame(addFrame);
+					me.ctx.drawImage(me.video, 0, 0, me.canvas.width, me.canvas.height);
+					var url = me.canvas.toDataURL('image/webp', 1); // image/jpeg is way faster :(
+					images.push(url);
+				}
+			}
+
+			requestAnimFrame(addFrame);
+			
           }, 1000);
         }, 1000);
       }, 1000);
@@ -1818,7 +1853,8 @@
       startCard.addCard(card);
 
       if (!!global.navigator.getUserMedia) {
-        card.addCard(new CameraCard("camera", card));
+        //card.addCard(new CameraCard("camera", card));
+		card.addCard(new VideoCard("video", card));
       }
 
       mapCard = new Card(cardType.CONTENT_CARD, "map", undefined, {"id": "map"});
